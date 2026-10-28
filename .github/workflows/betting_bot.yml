@@ -3,7 +3,7 @@ name: Auto Betting Bot 24/7
 on:
   schedule:
     - cron: '0 */3 * * *' # Se ejecuta automáticamente cada 3 horas
-  workflow_dispatch: # Permite lanzarlo manualmente cuando quieras desde la pestaña Actions de GitHub
+  workflow_dispatch: # Permite lanzarlo manualmente desde la pestaña Actions
 
 jobs:
   run-bots:
