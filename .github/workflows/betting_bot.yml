@@ -1,0 +1,45 @@
+name: Auto Betting Bot 24/7
+
+on:
+  schedule:
+    - cron: '0 */3 * * *' # Se ejecuta automáticamente cada 3 horas
+  workflow_dispatch: # Permite lanzarlo manualmente cuando quieras desde la pestaña Actions de GitHub
+
+jobs:
+  run-bots:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Permite actualizar la base de datos en el repositorio
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pandas numpy joblib
+
+      - name: Run Basketball Bot
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: python bot_predictivo.py
+
+      - name: Run Football Bot
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: python bot_futbol.py
+
+      - name: Commit and push updated database
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.io"
+          git add apuestas.db logs_bot.txt || true
+          git diff --staged --quiet || git commit -m "🤖 Actualización automática de apuestas y base de datos [skip ci]"
+          git push
