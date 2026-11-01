@@ -29,15 +29,13 @@ DEPORTES_BASKET = [
     "basketball_spain_acb",
     "basketball_italy_lega_basket",  # Liga Italiana
     "basketball_germany_bbl",        # Liga Alemana
-    "basketball_ncaab",              # NCAA Baloncesto Universitario (gran volumen)
+    "basketball_ncaab",              # NCAA Baloncesto Universitario
 ]
 
 # --- CONFIGURACIÓN DE GESTIÓN DE BANKROLL (FASE 3) ---
 BANKROLL_INICIAL = 20.0  # Capital inicial real (20 €)
 FRACCION_KELLY = 0.25  # Fracción conservadora de Kelly (1/4 de Kelly)
-STAKE_MAX_PORCENTAJE = (
-    0.03  # Límite máximo del 3% del bankroll actual por apuesta
-)
+STAKE_MAX_PORCENTAJE = 0.03  # Límite máximo del 3% del bankroll actual por apuesta
 UMBRAL_EV = 0.01  # Filtro relajado a +EV > 1% para mayor volumen
 
 
@@ -144,8 +142,8 @@ def preparar_features_partido(df_hist, equipo_local, equipo_visitante):
       "loc_descanso": loc_descanso,
       "loc_b2b": loc_b2b,
       "vis_pts_favor_m5": float(st_vis["pts_favor_m5"].values[0]),
-      "vis_pts_contra_m5": float(st_vis["vis_pts_contra_m5"].values[0]),
-      "vis_fg_m5": float(st_vis["vis_fg_m5"].values[0]),
+      "vis_pts_contra_m5": float(st_vis["pts_contra_m5"].values[0]),  # Corregido y operativo
+      "vis_fg_m5": float(st_vis["fg_m5"].values[0]),
       "vis_net_rating_m5": vis_net_rating,
       "vis_descanso": vis_descanso,
       "vis_b2b": vis_b2b,
@@ -322,7 +320,6 @@ def ejecutar_bot():
             if not c_home or not c_away:
               continue
 
-            # Si no hay modelo ML (ACB / Euroliga / otras), usar probabilidad implícita desvisada (sin vig)
             if prob_local is None:
               p_raw_h = 1.0 / c_home
               p_raw_a = 1.0 / c_away
@@ -404,7 +401,6 @@ def ejecutar_bot():
               if not name or cuota is None:
                 continue
 
-              # Probabilidad implícita basada en cuota de mercado
               p_real = 1.0 / cuota
               ev = (p_real * cuota) - 1.0
 
