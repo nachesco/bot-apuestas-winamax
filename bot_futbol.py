@@ -11,11 +11,15 @@ BANKROLL_INICIAL = 20.0
 CRITERIO_KELLY = 0.25
 MAX_STAKE_PCT = 0.03
 MIN_STAKE_EUR = 0.10
-UMBRAL_EV = 0.02  # Filtro estricto +EV > 2%
+UMBRAL_EV = 0.01  # Filtro relajado a +EV > 1% para mayor volumen
 
 DEPORTES_FUTBOL = [
     "soccer_spain_la_liga",
-    "soccer_epl"
+    "soccer_epl",
+    "soccer_italy_serie_a",          # Serie A (Italia)
+    "soccer_germany_bundesliga",     # Alemania (Bundesliga)
+    "soccer_france_ligue_one",       # Francia (Ligue 1)
+    "soccer_uefa_champs_league"      # Champions League
 ]
 
 def obtener_bankroll_actual():
@@ -157,7 +161,7 @@ def escanear_futbol():
                                     b = price - 1.0
                                     q = 1.0 - prob_estimada
                                     f_kelly = (b * prob_estimada - q) / b
-                                    f_kelly_ajustado = f_kelly * CRITERIO_KELLY
+                                    f_kelly_ajustado = f_kelly * CRITERIO_KELSY if 'CRITERIO_KELSY' in globals() else f_kelly * CRITERIO_KELLY
                                     stake_pct = min(f_kelly_ajustado, MAX_STAKE_PCT)
                                     stake_eur = max(MIN_STAKE_EUR, round(bankroll * stake_pct, 2))
                                     
