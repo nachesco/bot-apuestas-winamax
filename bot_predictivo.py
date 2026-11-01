@@ -21,12 +21,15 @@ MODELO_TOTALES_PATH = "modelo_totales.pkl"
 HISTORICO_PATH = "datos_historicos_nba.csv"
 LOG_BOT = "logs_bot.txt"
 
-# Configuración de The Odds API (Ligas múltiples de Baloncesto)
+# Configuración de The Odds API (Ligas múltiples de Baloncesto ampliadas)
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "c47d66c9ae730ebc0dee61ac3c68581e")
 DEPORTES_BASKET = [
     "basketball_nba",
     "basketball_euroleague",
     "basketball_spain_acb",
+    "basketball_italy_lega_basket",  # Liga Italiana
+    "basketball_germany_bbl",        # Liga Alemana
+    "basketball_ncaab",              # NCAA Baloncesto Universitario (gran volumen)
 ]
 
 # --- CONFIGURACIÓN DE GESTIÓN DE BANKROLL (FASE 3) ---
@@ -35,7 +38,7 @@ FRACCION_KELLY = 0.25  # Fracción conservadora de Kelly (1/4 de Kelly)
 STAKE_MAX_PORCENTAJE = (
     0.03  # Límite máximo del 3% del bankroll actual por apuesta
 )
-UMBRAL_EV = 0.02  # Filtro estricto +EV > 2%
+UMBRAL_EV = 0.01  # Filtro relajado a +EV > 1% para mayor volumen
 
 
 def actualizar_log():
@@ -141,8 +144,8 @@ def preparar_features_partido(df_hist, equipo_local, equipo_visitante):
       "loc_descanso": loc_descanso,
       "loc_b2b": loc_b2b,
       "vis_pts_favor_m5": float(st_vis["pts_favor_m5"].values[0]),
-      "vis_pts_contra_m5": float(st_vis["pts_contra_m5"].values[0]),
-      "vis_fg_m5": float(st_vis["fg_m5"].values[0]),
+      "vis_pts_contra_m5": float(st_vis["vis_pts_contra_m5"].values[0]),
+      "vis_fg_m5": float(st_vis["vis_fg_m5"].values[0]),
       "vis_net_rating_m5": vis_net_rating,
       "vis_descanso": vis_descanso,
       "vis_b2b": vis_b2b,
@@ -319,7 +322,7 @@ def ejecutar_bot():
             if not c_home or not c_away:
               continue
 
-            # Si no hay modelo ML (ACB / Euroliga), usar probabilidad implícita desvisada (sin vig)
+            # Si no hay modelo ML (ACB / Euroliga / otras), usar probabilidad implícita desvisada (sin vig)
             if prob_local is None:
               p_raw_h = 1.0 / c_home
               p_raw_a = 1.0 / c_away
@@ -385,7 +388,7 @@ def ejecutar_bot():
 
                   enviar_alerta_telegram(
                       f"🏀 *¡Apuesta Basket (+EV en Winamax)!*\n\n"
-                      f"🏆 Ligar: {deporte}\n"
+                      f"🏆 Liga: {deporte}\n"
                       f"🆚 {equipo_local} vs {equipo_visitante}\n"
                       f"📌 {seleccion} | Cuota: {cuota} | EV: {ev*100:.2f}%\n"
                       f"💵 Stake: {stake}€ (Restante: {bankroll_disponible:.2f}€)"
