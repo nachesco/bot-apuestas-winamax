@@ -8,7 +8,9 @@ on:
 jobs:
   ejecutar-bots:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write       # OBLIGATORIO: Permite al bot guardar y hacer commit/push en el repositorio
+
     steps:
       - name: Clonar repositorio
         uses: actions/checkout@v4
