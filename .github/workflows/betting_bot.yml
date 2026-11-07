@@ -2,8 +2,8 @@ name: Sistema Automatizado de Apuestas +EV
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Se ejecuta automáticamente cada 5 minutos
-  workflow_dispatch:        # Permite lanzarlo manualmente desde la pestaña Actions en GitHub
+    - cron: '*/15 * * * *'  # Se ejecuta automáticamente cada 15 minutos
+  workflow_dispatch:        # Te permite lanzarlo manualmente cuando quieras
 
 jobs:
   ejecutar-bots:
