@@ -21,22 +21,22 @@ MODELO_TOTALES_PATH = "modelo_totales.pkl"
 HISTORICO_PATH = "datos_historicos_nba.csv"
 LOG_BOT = "logs_bot.txt"
 
-# Configuración de The Odds API (Ligas múltiples de Baloncesto ampliadas)
+# Configuración de The Odds API con lectura correcta de variables de entorno
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "c47d66c9ae730ebc0dee61ac3c68581e")
 DEPORTES_BASKET = [
     "basketball_nba",
     "basketball_euroleague",
     "basketball_spain_acb",
-    "basketball_italy_lega_basket",  # Liga Italiana
-    "basketball_germany_bbl",        # Liga Alemana
-    "basketball_ncaab",              # NCAA Baloncesto Universitario
+    "basketball_italy_lega_basket",
+    "basketball_germany_bbl",
+    "basketball_ncaab",
 ]
 
 # --- CONFIGURACIÓN DE GESTIÓN DE BANKROLL (FASE 3) ---
-BANKROLL_INICIAL = 20.0  # Capital inicial real (20 €)
-FRACCION_KELLY = 0.25  # Fracción conservadora de Kelly (1/4 de Kelly)
-STAKE_MAX_PORCENTAJE = 0.03  # Límite máximo del 3% del bankroll actual por apuesta
-UMBRAL_EV = 0.01  # Filtro relajado a +EV > 1% para mayor volumen
+BANKROLL_INICIAL = 20.0
+FRACCION_KELLY = 0.25
+STAKE_MAX_PORCENTAJE = 0.03
+UMBRAL_EV = 0.01
 
 
 def actualizar_log():
@@ -61,7 +61,6 @@ def enviar_alerta_telegram(mensaje):
 
 
 def preparar_features_partido(df_hist, equipo_local, equipo_visitante):
-  """Calcula promedios móviles (m5), descanso y aplica el impacto de lesiones (Fase 2)."""
   local = df_hist[
       [
           "fecha",
@@ -129,7 +128,6 @@ def preparar_features_partido(df_hist, equipo_local, equipo_visitante):
   loc_net_rating = float(st_local["net_rating_m5"].values[0])
   vis_net_rating = float(st_vis["net_rating_m5"].values[0])
 
-  # --- APLICACIÓN DEL IMPACTO DE LESIONES (FASE 2) ---
   pen_loc, pen_vis = obtener_penalizacion_lesion(equipo_local, equipo_visitante)
   loc_net_rating += pen_loc
   vis_net_rating += pen_vis
@@ -142,7 +140,7 @@ def preparar_features_partido(df_hist, equipo_local, equipo_visitante):
       "loc_descanso": loc_descanso,
       "loc_b2b": loc_b2b,
       "vis_pts_favor_m5": float(st_vis["pts_favor_m5"].values[0]),
-      "vis_pts_contra_m5": float(st_vis["pts_contra_m5"].values[0]),  # Corregido y operativo
+      "vis_pts_contra_m5": float(st_vis["pts_contra_m5"].values[0]),
       "vis_fg_m5": float(st_vis["fg_m5"].values[0]),
       "vis_net_rating_m5": vis_net_rating,
       "vis_descanso": vis_descanso,
@@ -166,7 +164,6 @@ def ejecutar_bot():
       f" multi-liga (Winamax, Bankroll: {BANKROLL_INICIAL}€)..."
   )
 
-  # Cargar modelos si existen (para NBA)
   modelo_nba = (
       joblib.load(MODELO_GANADOR_PATH)
       if os.path.exists(MODELO_GANADOR_PATH)
@@ -183,7 +180,6 @@ def ejecutar_bot():
   if df_hist is not None:
     df_hist["fecha"] = pd.to_datetime(df_hist["fecha"])
 
-  # Conexión a Base de Datos y Migración Automática
   conn = sqlite3.connect(DB_PATH)
   cursor = conn.cursor()
 
@@ -225,7 +221,6 @@ def ejecutar_bot():
       except Exception:
         pass
 
-  # --- CÁLCULO DEL BANKROLL DISPONIBLE REAL ---
   df_br = pd.read_sql_query(
       "SELECT SUM(pnl) as total_pnl FROM apuestas WHERE estado != 'PENDIENTE'",
       conn,
@@ -258,20 +253,19 @@ def ejecutar_bot():
 
   apuestas_realizadas = 0
 
-  # Iterar por cada competición de baloncesto configurada
   for deporte in DEPORTES_BASKET:
     url = f"https://api.the-odds-api.com/v4/sports/{deporte}/odds/"
     params = {
         "apiKey": ODDS_API_KEY,
-        "regions": "eu",
+        "regions": "fr,de,eu",  # Ampliadas regiones para Winamax
         "markets": "h2h,spreads,totals",
-        "bookmakers": "winamax",  # Exclusivo Winamax
         "oddsFormat": "decimal",
     }
 
     try:
       response = requests.get(url, params=params, timeout=10)
       if response.status_code != 200:
+        print(f"⚠️ Error API en {deporte}: HTTP {response.status_code}")
         continue
       partidos = response.json()
     except Exception as e:
@@ -279,8 +273,7 @@ def ejecutar_bot():
       continue
 
     print(
-        f"📡 Competición [{deporte}]: {len(partidos)} partidos encontrados en"
-        " Winamax"
+        f"📡 Competición [{deporte}]: {len(partidos)} partidos encontrados"
     )
 
     for p in partidos:
@@ -292,7 +285,6 @@ def ejecutar_bot():
       equipo_visitante = p.get("away_team")
       fecha_partido = p.get("commence_time")
 
-      # Determinar probabilidades según la liga
       prob_local, prob_visitante = None, None
       if deporte == "basketball_nba" and modelo_nba and df_hist is not None:
         X_pred = preparar_features_partido(
@@ -303,8 +295,11 @@ def ejecutar_bot():
           prob_visitante = 1.0 - prob_local
 
       for bookmaker in p.get("bookmakers", []):
-        casa = bookmaker.get("title")
-        if casa.lower() != "winamax":
+        casa = bookmaker.get("title", "")
+        key_bk = bookmaker.get("key", "")
+        
+        # Filtro flexible para detectar Winamax en cualquiera de sus variantes europeas
+        if "winamax" not in casa.lower() and "winamax" not in key_bk.lower():
           continue
 
         for market in bookmaker.get("markets", []):

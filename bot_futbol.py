@@ -3,8 +3,8 @@ import sqlite3
 import requests
 import pandas as pd
 
-# API Key configurada directamente
-API_KEY = "c47d66c9ae730ebc0dee61ac3c68581e"
+# Carga segura de la API Key desde el entorno o fallback
+API_KEY = os.getenv("ODDS_API_KEY", "c47d66c9ae730ebc0dee61ac3c68581e")
 
 DB_PATH = "apuestas.db"
 BANKROLL_INICIAL = 20.0
@@ -16,10 +16,10 @@ UMBRAL_EV = 0.01  # Filtro relajado a +EV > 1% para mayor volumen
 DEPORTES_FUTBOL = [
     "soccer_spain_la_liga",
     "soccer_epl",
-    "soccer_italy_serie_a",          # Serie A (Italia)
-    "soccer_germany_bundesliga",     # Alemania (Bundesliga)
-    "soccer_france_ligue_one",       # Francia (Ligue 1)
-    "soccer_uefa_champs_league"      # Champions League
+    "soccer_italy_serie_a",
+    "soccer_germany_bundesliga",
+    "soccer_france_ligue_one",
+    "soccer_uefa_champs_league"
 ]
 
 def obtener_bankroll_actual():
@@ -63,13 +63,13 @@ def escanear_futbol():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id_partido FROM apuestas WHERE estado = 'PENDIENTE'")
-    apuestas_existentes = set(row[0] for row in cursor.fetchall())
     
     apuestas_encontradas = 0
     mercados = "h2h,totals"
     
     for deporte in DEPORTES_FUTBOL:
-        url = f"https://api.the-odds-api.com/v4/sports/{deporte}/odds/?apiKey={API_KEY}&regions=eu&markets={mercados}&bookmakers=winamax"
+        # Ampliadas regiones a fr, de, eu para capturar Winamax correctamente
+        url = f"https://api.the-odds-api.com/v4/sports/{deporte}/odds/?apiKey={API_KEY}&regions=fr,de,eu&markets={mercados}"
         try:
             res = requests.get(url, timeout=10)
             if res.status_code != 200:
@@ -84,7 +84,8 @@ def escanear_futbol():
                 commence_time = p.get('commence_time')
                 
                 bookmakers = p.get('bookmakers', [])
-                winamax = next((b for b in bookmakers if b['key'] == 'winamax'), None)
+                # Búsqueda flexible de Winamax (winamax_fr, winamax_de, etc.)
+                winamax = next((b for b in bookmakers if 'winamax' in b.get('key', '').lower()), None)
                 if not winamax:
                     continue
                 
@@ -161,7 +162,7 @@ def escanear_futbol():
                                     b = price - 1.0
                                     q = 1.0 - prob_estimada
                                     f_kelly = (b * prob_estimada - q) / b
-                                    f_kelly_ajustado = f_kelly * CRITERIO_KELSY if 'CRITERIO_KELSY' in globals() else f_kelly * CRITERIO_KELLY
+                                    f_kelly_ajustado = f_kelly * CRITERIO_KELLY
                                     stake_pct = min(f_kelly_ajustado, MAX_STAKE_PCT)
                                     stake_eur = max(MIN_STAKE_EUR, round(bankroll * stake_pct, 2))
                                     
