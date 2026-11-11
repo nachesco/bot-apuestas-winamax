@@ -1,4 +1,5 @@
 from datetime import datetime
+from dotenv import load_dotenv
 import os
 import sqlite3
 import sys
@@ -9,6 +10,16 @@ import requests
 
 # Importamos el gestor de lesiones de la Fase 2
 from lesiones import obtener_penalizacion_lesion
+
+# Cargar variables del archivo .env local
+load_dotenv()
+
+# Recopilar las API Keys disponibles (Principal y Secundaria)
+API_KEYS = [os.getenv("ODDS_API_KEY"), os.getenv("ODDS_API_KEY_SECUNDARIA")]
+API_KEYS = [k for k in API_KEYS if k]
+
+if not API_KEYS:
+  print("❌ ERROR CRÍTICO: No se ha encontrado ninguna API Key en el archivo .env")
 
 if sys.platform == "win32":
   sys.stdout.reconfigure(encoding="utf-8")
@@ -21,8 +32,6 @@ MODELO_TOTALES_PATH = "modelo_totales.pkl"
 HISTORICO_PATH = "datos_historicos_nba.csv"
 LOG_BOT = "logs_bot.txt"
 
-# Configuración de The Odds API con lectura correcta de variables de entorno
-ODDS_API_KEY = os.getenv("ODDS_API_KEY", "c47d66c9ae730ebc0dee61ac3c68581e")
 DEPORTES_BASKET = [
     "basketball_nba",
     "basketball_euroleague",
@@ -40,7 +49,6 @@ UMBRAL_EV = 0.01
 
 
 def actualizar_log():
-  """Actualiza la marca de tiempo del log para el Dashboard."""
   with open(LOG_BOT, "w", encoding="utf-8") as f:
     f.write(
         f"Última ejecución del bot multi-liga: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -48,7 +56,6 @@ def actualizar_log():
 
 
 def enviar_alerta_telegram(mensaje):
-  """Envía notificación a Telegram si las variables de entorno están configuradas."""
   token = os.getenv("TELEGRAM_BOT_TOKEN")
   chat_id = os.getenv("TELEGRAM_CHAT_ID")
   if token and chat_id:
@@ -159,6 +166,10 @@ def preparar_features_partido(df_hist, equipo_local, equipo_visitante):
 
 
 def ejecutar_bot():
+  if not API_KEYS:
+    print("❌ No hay claves configuradas. Abortando escaneo de baloncesto.")
+    return
+
   print(
       f"🤖 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Ejecutando bot"
       f" multi-liga (Winamax, Bankroll: {BANKROLL_INICIAL}€)..."
@@ -254,22 +265,35 @@ def ejecutar_bot():
   apuestas_realizadas = 0
 
   for deporte in DEPORTES_BASKET:
-    url = f"https://api.the-odds-api.com/v4/sports/{deporte}/odds/"
-    params = {
-        "apiKey": ODDS_API_KEY,
-        "regions": "fr,de,eu",  # Ampliadas regiones para Winamax
-        "markets": "h2h,spreads,totals",
-        "oddsFormat": "decimal",
-    }
+    partidos = None
+    # Intento de petición rotando por las claves disponibles si da 401
+    for api_key in API_KEYS:
+      url = f"https://api.the-odds-api.com/v4/sports/{deporte}/odds/"
+      params = {
+          "apiKey": api_key,
+          "regions": "fr,de,eu",
+          "markets": "h2h,spreads,totals",
+          "oddsFormat": "decimal",
+      }
+      try:
+        response = requests.get(url, params=params, timeout=10)
+        if response.status_code == 200:
+          partidos = response.json()
+          break
+        elif response.status_code == 401:
+          print(
+              f"⚠️ Clave actual agotada (401) en {deporte}, probando clave"
+              " alternativa..."
+          )
+          continue
+        else:
+          print(f"⚠️ Error API en {deporte}: HTTP {response.status_code}")
+          break
+      except Exception as e:
+        print(f"❌ Error consultando {deporte}: {e}")
+        break
 
-    try:
-      response = requests.get(url, params=params, timeout=10)
-      if response.status_code != 200:
-        print(f"⚠️ Error API en {deporte}: HTTP {response.status_code}")
-        continue
-      partidos = response.json()
-    except Exception as e:
-      print(f"❌ Error consultando {deporte}: {e}")
+    if partidos is None:
       continue
 
     print(
@@ -297,8 +321,7 @@ def ejecutar_bot():
       for bookmaker in p.get("bookmakers", []):
         casa = bookmaker.get("title", "")
         key_bk = bookmaker.get("key", "")
-        
-        # Filtro flexible para detectar Winamax en cualquiera de sus variantes europeas
+
         if "winamax" not in casa.lower() and "winamax" not in key_bk.lower():
           continue
 
@@ -306,7 +329,7 @@ def ejecutar_bot():
           m_key = market.get("key")
           outcomes = market.get("outcomes", [])
 
-          # --- 1. MERCADO GANADOR (H2H) ---
+          # 1. MERCADO GANADOR (H2H)
           if m_key == "h2h" and len(outcomes) == 2:
             cuotas_dict = {o.get("name"): o.get("price") for o in outcomes}
             c_home = cuotas_dict.get(equipo_local)
@@ -386,7 +409,7 @@ def ejecutar_bot():
                       f"💵 Stake: {stake}€ (Restante: {bankroll_disponible:.2f}€)"
                   )
 
-          # --- 2. MERCADOS DE HÁNDICAPS (SPREADS) Y TOTALES (TOTALS) ---
+          # 2. MERCADOS DE HÁNDICAPS (SPREADS) Y TOTALES (TOTALS)
           elif m_key in ["spreads", "totals"]:
             for outcome in outcomes:
               name = outcome.get("name")
